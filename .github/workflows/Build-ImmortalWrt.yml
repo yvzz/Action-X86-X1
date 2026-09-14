@@ -24,7 +24,7 @@ on:
         type: boolean
         default: true
   schedule:
-    - cron: 0 16 */10 * *  
+    - cron: 0 20 * * 6
   repository_dispatch:
     types: [ "X1Pro Update" ]
 
@@ -83,18 +83,15 @@ jobs:
           pip3 install pyelftools --break-system-packages 2>/dev/null || true
           sudo timedatectl set-timezone "$TZ"
 
-      - name: Prepare feeds for cache key
+      - name: Prepare feeds cache key
         id: feeds
         run: |
           FEEDS_PACKAGES=$(git ls-remote https://github.com/immortalwrt/packages.git openwrt-24.10 | cut -f1)
           FEEDS_LUCI=$(git ls-remote https://github.com/immortalwrt/luci.git openwrt-24.10 | cut -f1)
-          FEEDS_ISTORE=$(git ls-remote https://github.com/linkease/istore.git master | cut -f1)
-          FEEDS_HASH=$(echo "$FEEDS_PACKAGES $FEEDS_LUCI $FEEDS_ISTORE" | sha256sum | cut -d' ' -f1)
+          FEEDS_ROUTING=$(git ls-remote https://github.com/openwrt/routing.git openwrt-24.10 | cut -f1)
+          FEEDS_OPENCLASH=$(git ls-remote https://github.com/vernesong/OpenClash.git master | cut -f1)
+          FEEDS_HASH=$(echo "$FEEDS_PACKAGES $FEEDS_LUCI $FEEDS_ROUTING $FEEDS_OPENCLASH" | sha256sum | cut -d' ' -f1)
           echo "feeds_hash=$FEEDS_HASH" >> $GITHUB_OUTPUT
-
-          git clone --depth=1 https://github.com/immortalwrt/packages.git --branch openwrt-24.10 feeds/packages
-          git clone --depth=1 https://github.com/immortalwrt/luci.git --branch openwrt-24.10 feeds/luci
-          git clone --depth=1 https://github.com/linkease/istore.git feeds/istore
 
       - name: Clone source
         run: |
@@ -126,15 +123,10 @@ jobs:
           key: build-cache-${{ hashFiles('feeds.conf.default', '.github/workflows/Build-ImmortalWrt.yml') }}-${{ steps.feeds.outputs.feeds_hash }}-${{ runner.os }}
           restore-keys: build-cache-${{ runner.os }}-
 
-      - name: Apply patches
-        working-directory: source
-        run: |
-          # feeds.conf.default 注入到源码，feeds 本身在 Prepare feeds 步骤已克隆到 source/
-          cp $GITHUB_WORKSPACE/feeds.conf.default .
-
       - name: Update & Install feeds
         working-directory: source
         run: |
+          cp $GITHUB_WORKSPACE/feeds.conf.default .
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
@@ -148,8 +140,6 @@ jobs:
           echo "CONFIG_TARGET_DEVICE_PACKAGES_mediatek_filogic_DEVICE_oray_x1pro=\"kmod-usb3 kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware automount\"" >> .config
           chmod +x $GITHUB_WORKSPACE/diy-part1.sh
           $GITHUB_WORKSPACE/diy-part1.sh
-          chmod +x $GITHUB_WORKSPACE/diy-part2.sh
-          $GITHUB_WORKSPACE/diy-part2.sh
           make defconfig
 
       - name: Build
@@ -253,3 +243,121 @@ jobs:
             source/bin/targets/mediatek/filogic/*oray_x1pro*squashfs-sysupgrade.bin
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Delete Old Releases
+        if: steps.compile.outputs.status == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RETENTION=7
+          CUTOFF=$(date -d "$RETENTION days ago" +%s)
+          echo "保留最近 ${RETENTION} 天的 Release"
+
+          releases=$(gh release list \
+            --exclude-drafts \
+            --json tagName,publishedAt \
+            --jq '.[] | "\(.publishedAt)|\(.tagName)"')
+
+          if [ -z "$releases" ]; then
+            echo "没有可删除的 Release"
+            exit 0
+          fi
+
+          deleted=0
+          kept=0
+
+          while IFS='|' read -r published tag; do
+            [ -z "$tag" ] && continue
+            published_ts=$(date -d "$published" +%s 2>/dev/null)
+            if [ -z "$published_ts" ]; then
+              echo "  跳过: $tag (无法解析日期)"
+              continue
+            fi
+            if [ "$published_ts" -lt "$CUTOFF" ]; then
+              echo "  删除: $tag (发布于 $published)"
+              gh release delete "$tag" --yes --repo ${{ github.repository }}
+              deleted=$((deleted + 1))
+            else
+              echo "  保留: $tag (发布于 $published)"
+              kept=$((kept + 1))
+            fi
+          done <<< "$releases"
+
+          echo ""
+          echo "完成: 删除 ${deleted} 个, 保留 ${kept} 个"
+
+      - name: Delete Orphan Tags
+        if: steps.compile.outputs.status == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REPO=${{ github.repository }}
+          echo "获取所有 Remote Tag..."
+          remote_tags=$(gh api "repos/$REPO/git/matching-refs/tags" --paginate --jq '.[].ref' 2>/dev/null)
+
+          if [ -z "$remote_tags" ]; then
+            echo "没有 Tag"
+            exit 0
+          fi
+
+          deleted=0
+          for ref in $remote_tags; do
+            tag=$(echo "$ref" | sed 's|^refs/tags/||')
+            release=$(gh release view "$tag" --json tagName --jq '.tagName' 2>/dev/null || true)
+            if [ -z "$release" ]; then
+              echo "  删除孤立 Tag: $tag"
+              if gh api --method DELETE "repos/$REPO/git/refs/tags/$tag" \
+                   --silent 2>/tmp/delete_err.log; then
+                deleted=$((deleted + 1))
+                echo "    ✓ 已删除"
+              else
+                echo "    ⚠ 删除失败: $(cat /tmp/delete_err.log)"
+              fi
+            else
+              echo "  保留 (有 Release): $tag"
+            fi
+          done
+
+          echo ""
+          echo "完成: 删除 ${deleted} 个孤立 Tag"
+
+      - name: Delete Old Workflow Runs
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RETAIN_DAYS=3
+          CURRENT_RUN_ID="${{ github.run_id }}"
+          echo "清理超过 ${RETAIN_DAYS} 天的 Workflow Runs (当前 run: $CURRENT_RUN_ID)"
+
+          gh run list -R ${{ github.repository }} --limit 200 \
+            --json databaseId,status,conclusion,createdAt,updatedAt \
+            > /tmp/runs.json
+
+          > /tmp/ids-to-delete.txt
+
+          CUTOFF=$(date -u -d "$RETAIN_DAYS days ago" +%Y-%m-%dT%H:%M:%SZ)
+
+          # failed/cancelled/skipped: 不受时间限制，全删
+          jq -r --arg CURRENT "$CURRENT_RUN_ID" \
+            '.[] | select(.status == "completed") | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "skipped") | select((.databaseId | tostring) != $CURRENT) | .databaseId | tostring' \
+            /tmp/runs.json >> /tmp/ids-to-delete.txt
+
+          # success runs: 删超过保留期的
+          jq -r --arg CURRENT "$CURRENT_RUN_ID" --arg CUTOFF "$CUTOFF" \
+            '.[] | select(.status == "completed") | select(.conclusion == "success") | select((.databaseId | tostring) != $CURRENT) | select(.createdAt < $CUTOFF) | .databaseId | tostring' \
+            /tmp/runs.json >> /tmp/ids-to-delete.txt
+
+          COUNT=$(wc -l < /tmp/ids-to-delete.txt)
+          echo "Found $COUNT runs to delete"
+
+          if [ "$COUNT" -eq 0 ]; then
+            exit 0
+          fi
+
+          while read -r id; do
+            echo "Deleting run: $id"
+            gh run delete "$id" -R ${{ github.repository }} 2>&1 | sed 's/^/  /' || echo "  Failed: $id"
+          done < /tmp/ids-to-delete.txt
+
+          echo "Done"
