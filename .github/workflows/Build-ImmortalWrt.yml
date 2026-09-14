@@ -93,7 +93,7 @@ jobs:
 
       - name: Clone source
         run: |
-          git clone --depth=1 https://github.com/yvzz/immortalwrt-mt798x-6.6 source
+          git clone --depth=1 https://github.com/padavanonly/immortalwrt-mt798x-6.6 source
 
       - name: Setup ccache
         run: |
@@ -137,8 +137,8 @@ jobs:
           cp $GITHUB_WORKSPACE/config/X1Pro.config .config
           sed -i "/CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_/d" .config
           sed -i "/CONFIG_TARGET_DEVICE_PACKAGES_mediatek_filogic_DEVICE_/d" .config
-          echo "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_oray_x1pro-v1-ubootmod=y" >> .config
-          echo "CONFIG_TARGET_DEVICE_PACKAGES_mediatek_filogic_DEVICE_oray_x1pro-v1-ubootmod=\"kmod-usb3 kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware automount\"" >> .config
+          echo "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_oray_x1pro=y" >> .config
+          echo "CONFIG_TARGET_DEVICE_PACKAGES_mediatek_filogic_DEVICE_oray_x1pro=\"kmod-usb3 kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware automount\"" >> .config
           chmod +x $GITHUB_WORKSPACE/diy-part1.sh
           $GITHUB_WORKSPACE/diy-part1.sh
           chmod +x $GITHUB_WORKSPACE/diy-part2.sh
@@ -184,7 +184,7 @@ jobs:
             /usr/bin/make -j${NPROC} 2>&1 | tee build.log
           fi
 
-          SYSUPGRADE=$(find bin/targets -name "*oray_x1pro-v1-ubootmod*sysupgrade.bin" 2>/dev/null | head -1)
+          SYSUPGRADE=$(find bin/targets -name "*oray_x1pro*sysupgrade.bin" 2>/dev/null | head -1)
           if [ -n "$SYSUPGRADE" ]; then
             echo "Firmware built: $SYSUPGRADE ($(du -h "$SYSUPGRADE" | cut -f1))"
             echo "name=$(basename "$SYSUPGRADE")" >> $GITHUB_OUTPUT
@@ -205,7 +205,7 @@ jobs:
       - name: List build artifacts
         run: |
           echo "=== Firmware artifacts ==="
-          find source/bin/targets -name "*oray_x1pro-v1-ubootmod*" 2>/dev/null | while read f; do
+          find source/bin/targets -name "*oray_x1pro*" 2>/dev/null | while read f; do
             echo "  $(basename $f) ($(du -h "$f" | cut -f1))"
           done
 
@@ -229,8 +229,8 @@ jobs:
         uses: actions/upload-artifact@v4
         if: steps.compile.outputs.status == 'success'
         with:
-          name: ImmortalWrt_X1Pro-${{ steps.info.outputs.build_date }}-${{ steps.info.outputs.build_time }}-oray_x1pro-v1-ubootmod
-          path: source/bin/targets/mediatek/filogic/*oray_x1pro-v1-ubootmod*squashfs-sysupgrade.bin
+          name: ImmortalWrt_X1Pro-${{ steps.info.outputs.build_date }}-${{ steps.info.outputs.build_time }}-oray_x1pro
+          path: source/bin/targets/mediatek/filogic/*oray_x1pro*squashfs-sysupgrade.bin
           retention-days: 30
 
       - name: Create Release
@@ -243,6 +243,6 @@ jobs:
           name: ImmortalWrt X1Pro ${{ steps.info.outputs.build_date }}-${{ steps.info.outputs.build_time }}
           generate_release_notes: true
           files: |
-            source/bin/targets/mediatek/filogic/*oray_x1pro-v1-ubootmod*squashfs-sysupgrade.bin
+            source/bin/targets/mediatek/filogic/*oray_x1pro*squashfs-sysupgrade.bin
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

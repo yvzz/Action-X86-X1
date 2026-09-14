@@ -16,8 +16,6 @@ mkdir -p "$OPENWRT/package"
 
 git clone --depth=1 https://github.com/eamonxg/luci-theme-aurora "$OPENWRT/package/luci-theme-aurora"
 git clone --depth=1 https://github.com/eamonxg/luci-app-aurora-config "$OPENWRT/package/luci-app-aurora-config"
-git clone --depth=1 https://github.com/timsaya/luci-app-bandix "$OPENWRT/package/luci-app-bandix"
-git clone --depth=1 https://github.com/timsaya/openwrt-bandix "$OPENWRT/package/openwrt-bandix"
 echo "  → Third-party packages cloned"
 
 # 2. DTS/dtsi 与 filogic.mk 已合入上游源码（yvzz/immortalwrt-mt798x-6.6）
@@ -26,14 +24,14 @@ echo "  → Third-party packages cloned"
 # 4. Patch upstream 02_network — X1 Pro 接口定义（幂等）
 NETWORK_FILE="$OPENWRT/target/linux/mediatek/filogic/base-files/etc/board.d/02_network"
 if [ -f "$NETWORK_FILE" ]; then
-  if ! grep -q "oray,x1pro-v1|\\\\" "$NETWORK_FILE"; then
+  if ! grep -q "oray,x1pro|\\\\" "$NETWORK_FILE"; then
     python3 -c '
 import sys
 f = sys.argv[1]
 with open(f) as fh:
     content = fh.read()
 old = "\tcudy,tr3000-v1-ubootmod|\\\n"
-new = old + "\toray,x1pro-v1|\\\n\toray,x1pro-v1-ubootmod|\\\n"
+new = old + "\toray,x1pro-v1|\\\n"
 content = content.replace(old, new, 1)
 with open(f, "w") as fh:
     fh.write(content)
@@ -49,14 +47,14 @@ fi
 # 5. Patch platform.sh — sysupgrade 支持（幂等）
 PLATFORM_FILE="$OPENWRT/target/linux/mediatek/filogic/base-files/lib/upgrade/platform.sh"
 if [ -f "$PLATFORM_FILE" ]; then
-  if ! grep -q "oray,x1pro-v1-ubootmod|\\\\" "$PLATFORM_FILE"; then
+  if ! grep -q "oray,x1pro|\\\\" "$PLATFORM_FILE"; then
     python3 -c '
 import sys
 f = sys.argv[1]
 with open(f) as fh:
     content = fh.read()
 old = "\tcudy,wbr3000uax-v1-ubootmod|\\\n"
-new = old + "\toray,x1pro-v1-ubootmod|\\\n"
+new = old + "\toray,x1pro|\\\n"
 content = content.replace(old, new, 1)
 with open(f, "w") as fh:
     fh.write(content)
