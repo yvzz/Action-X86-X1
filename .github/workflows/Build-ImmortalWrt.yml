@@ -8,6 +8,11 @@ on:
   #   branches: [ main, master ]
   workflow_dispatch:
     inputs:
+      source_repo:
+        description: '源码仓库地址'
+        required: false
+        type: string
+        default: 'https://github.com/padavanonly/immortalwrt-mt798x-6.6'
       verbose:
         description: '启用详细编译日志 V=s（出错调试用）'
         required: false
@@ -93,7 +98,9 @@ jobs:
 
       - name: Clone source
         run: |
-          git clone --depth=1 https://github.com/padavanonly/immortalwrt-mt798x-6.6 source
+          SOURCE_REPO="${{ inputs.source_repo || 'https://github.com/padavanonly/immortalwrt-mt798x-6.6' }}"
+          echo "Cloning source from: $SOURCE_REPO"
+          git clone --depth=1 "$SOURCE_REPO" source
 
       - name: Setup ccache
         run: |
