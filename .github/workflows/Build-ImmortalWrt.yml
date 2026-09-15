@@ -141,6 +141,11 @@ jobs:
           chmod +x $GITHUB_WORKSPACE/diy-part1.sh
           $GITHUB_WORKSPACE/diy-part1.sh
           make defconfig
+          # defconfig 会自动启用 filogic 下所有注册设备，强制关闭非 X1 Pro 的
+          sed -i '/CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_oray_x1pro/!{/CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_/s/=y/=n/}' .config
+          make defconfig
+          echo "=== Target devices after defconfig ==="
+          grep "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_.*=y" .config || echo "(none)"
 
       - name: Build
         id: compile
