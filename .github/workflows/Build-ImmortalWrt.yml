@@ -38,6 +38,7 @@ jobs:
   build:
     name: Build X1Pro Firmware
     runs-on: ubuntu-24.04
+    timeout-minutes: 360
     steps:
       - name: Check Server Performance
         run: |
@@ -89,8 +90,7 @@ jobs:
           FEEDS_PACKAGES=$(git ls-remote https://github.com/immortalwrt/packages.git openwrt-24.10 | cut -f1)
           FEEDS_LUCI=$(git ls-remote https://github.com/immortalwrt/luci.git openwrt-24.10 | cut -f1)
           FEEDS_ROUTING=$(git ls-remote https://github.com/openwrt/routing.git openwrt-24.10 | cut -f1)
-          FEEDS_OPENCLASH=$(git ls-remote https://github.com/vernesong/OpenClash.git master | cut -f1)
-          FEEDS_HASH=$(echo "$FEEDS_PACKAGES $FEEDS_LUCI $FEEDS_ROUTING $FEEDS_OPENCLASH" | sha256sum | cut -d' ' -f1)
+          FEEDS_HASH=$(echo "$FEEDS_PACKAGES $FEEDS_LUCI $FEEDS_ROUTING" | sha256sum | cut -d' ' -f1)
           echo "feeds_hash=$FEEDS_HASH" >> $GITHUB_OUTPUT
 
       - name: Clone source
@@ -136,32 +136,24 @@ jobs:
           cp $GITHUB_WORKSPACE/config/X1Pro.config .config
           sed -i "/CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_/d" .config
           sed -i "/CONFIG_TARGET_DEVICE_PACKAGES_mediatek_filogic_DEVICE_/d" .config
-          echo "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_oray_x1pro=y" >> .config
-          echo "CONFIG_TARGET_DEVICE_PACKAGES_mediatek_filogic_DEVICE_oray_x1pro=\"kmod-usb3 kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware automount\"" >> .config
-          # 显式关闭 ruby（feeds install -a 会引入，defconfig 会自动启用）
-          echo "# CONFIG_PACKAGE_ruby is not set" >> .config
-          echo "# CONFIG_PACKAGE_ruby-dev is not set" >> .config
+          echo "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_oray_x1_pro=y" >> .config
+          echo "CONFIG_TARGET_DEVICE_PACKAGES_mediatek_filogic_DEVICE_oray_x1_pro=\"kmod-usb3 kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware automount\"" >> .config
           chmod +x $GITHUB_WORKSPACE/diy-part1.sh
           $GITHUB_WORKSPACE/diy-part1.sh
           make defconfig
           # defconfig 会自动启用 filogic 下所有注册设备，强制关闭非 X1 Pro 的
-          sed -i '/CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_oray_x1pro/!{/CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_/s/=y/=n/}' .config
-          make defconfig
-          # defconfig 可能重新启用 ruby，强制关闭所有 ruby 相关配置
-          sed -i 's/^CONFIG_\(.*ruby.*\)=y/# CONFIG_\1 is not set/' .config
-          sed -i 's/^CONFIG_\(.*ruby.*\)=".*"/# CONFIG_\1 is not set/' .config
+          sed -i '/CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_oray_x1_pro/!{/CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_/s/=y/=n/}' .config
           make defconfig
           echo "=== Target devices after defconfig ==="
           grep "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_.*=y" .config || echo "(none)"
-          echo "=== Ruby check ==="
-          grep -i ruby .config || echo "(no ruby configs)"
+          echo "=== Ruby/Perl check ==="
+          grep -iE "CONFIG_PACKAGE_(ruby|perl)" .config || echo "(no ruby/perl packages)"
 
       - name: Build
         id: compile
         working-directory: source
         env:
-          CCACHE_DISABLE: 1
-          CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache.conf
+          CCACHE_MAXSIZE: 2G
         run: |
           sudo fallocate -l 4G /swapfile 2>/dev/null || sudo dd if=/dev/zero of=/swapfile bs=1M count=4096
           sudo chmod 600 /swapfile
@@ -169,8 +161,10 @@ jobs:
           sudo swapon /swapfile
           NPROC=$(($(/usr/bin/nproc) > 4 ? 4 : $(/usr/bin/nproc)))
           echo "CPU: $(/usr/bin/nproc) cores, using -j${NPROC}"
-          unset CCACHE_DIR
-          export CCACHE_DISABLE=1
+          export CCACHE_DIR="$GITHUB_WORKSPACE/.ccache"
+          export CCACHE_CONFIGPATH="$GITHUB_WORKSPACE/.ccache.conf"
+          export CCACHE_MAXSIZE=2G
+          ccache -z 2>/dev/null || true
           /usr/bin/make download -j${NPROC}
           /usr/bin/make toolchain/binutils/prepare V=s 2>/dev/null || true
           for rf in build_dir/toolchain-*/binutils-*/binutils/readelf.c; do
@@ -195,7 +189,7 @@ jobs:
             /usr/bin/make -j${NPROC} 2>&1 | tee build.log
           fi
 
-          SYSUPGRADE=$(find bin/targets -name "*oray_x1pro*sysupgrade.bin" 2>/dev/null | head -1)
+          SYSUPGRADE=$(find bin/targets -name "*oray_x1-pro*sysupgrade.bin" 2>/dev/null | head -1)
           if [ -n "$SYSUPGRADE" ]; then
             echo "Firmware built: $SYSUPGRADE ($(du -h "$SYSUPGRADE" | cut -f1))"
             echo "name=$(basename "$SYSUPGRADE")" >> $GITHUB_OUTPUT
@@ -216,7 +210,7 @@ jobs:
       - name: List build artifacts
         run: |
           echo "=== Firmware artifacts ==="
-          find source/bin/targets -name "*oray_x1pro*" 2>/dev/null | while read f; do
+          find source/bin/targets -name "*oray_x1-pro*" 2>/dev/null | while read f; do
             echo "  $(basename $f) ($(du -h "$f" | cut -f1))"
           done
 
@@ -240,8 +234,8 @@ jobs:
         uses: actions/upload-artifact@v4
         if: steps.compile.outputs.status == 'success'
         with:
-          name: ImmortalWrt_X1Pro-${{ steps.info.outputs.build_date }}-${{ steps.info.outputs.build_time }}-oray_x1pro
-          path: source/bin/targets/mediatek/filogic/*oray_x1pro*squashfs-sysupgrade.bin
+          name: ImmortalWrt_X1Pro-${{ steps.info.outputs.build_date }}-${{ steps.info.outputs.build_time }}-oray_x1-pro
+          path: source/bin/targets/mediatek/filogic/*oray_x1-pro*squashfs-sysupgrade.bin
           retention-days: 30
 
       - name: Create Release
@@ -254,7 +248,7 @@ jobs:
           name: ImmortalWrt X1Pro ${{ steps.info.outputs.build_date }}-${{ steps.info.outputs.build_time }}
           generate_release_notes: true
           files: |
-            source/bin/targets/mediatek/filogic/*oray_x1pro*squashfs-sysupgrade.bin
+            source/bin/targets/mediatek/filogic/*oray_x1-pro*squashfs-sysupgrade.bin
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
