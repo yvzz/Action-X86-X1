@@ -4,7 +4,7 @@ on:
   # push:
   #   branches: [ main, master ]
   schedule:
-    - cron: 0 16 * * *
+    - cron: 10 23 */3 * *
   workflow_dispatch:
     inputs:
       delete_failed:
@@ -51,7 +51,7 @@ jobs:
       run: |
         set -e
 
-        RETAIN_DAYS="${{ inputs.retain_days || '3' }}"
+        RETAIN_DAYS="${{ inputs.retain_days || '7' }}"
         DELETE_FAILED="${{ inputs.delete_failed || 'YES' }}"
         DELETE_CANCELLED="${{ inputs.delete_cancelled || 'YES' }}"
         DELETE_SKIPPED="${{ inputs.delete_skipped || 'YES' }}"
