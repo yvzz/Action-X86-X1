@@ -26,12 +26,12 @@ fi
 
 # 3. 注入设备构建规则到 filogic.mk
 FILOGIC_MK="$OPENWRT/target/linux/mediatek/image/filogic.mk"
-if grep -q "oray_x1-pro" "$FILOGIC_MK"; then
-  echo "  → filogic.mk already has oray_x1-pro (skipping)"
+if grep -q "oray_x1_pro" "$FILOGIC_MK"; then
+  echo "  → filogic.mk already has oray_x1_pro (skipping)"
 else
   awk '
   /^TARGET_DEVICES \+= / && !inserted {
-    print "define Device/oray_x1-pro"
+    print "define Device/oray_x1_pro"
     print "  DEVICE_VENDOR := Oray"
     print "  DEVICE_MODEL := X1 Pro"
     print "  DEVICE_VARIANT := v1"
@@ -47,13 +47,13 @@ else
     print "  KERNEL_IN_UBI := 1"
     print "  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata"
     print "endef"
-    print "TARGET_DEVICES += oray_x1-pro"
+    print "TARGET_DEVICES += oray_x1_pro"
     print ""
     inserted=1
   }
   { print }
   ' "$FILOGIC_MK" > "$FILOGIC_MK.tmp" && mv "$FILOGIC_MK.tmp" "$FILOGIC_MK"
-  echo "  → filogic.mk: oray_x1-pro device added"
+  echo "  → filogic.mk: oray_x1_pro device added"
 fi
 
 # 4. 注入 02_network 设备支持

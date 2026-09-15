@@ -189,7 +189,7 @@ jobs:
             /usr/bin/make -j${NPROC} 2>&1 | tee build.log
           fi
 
-          SYSUPGRADE=$(find bin/targets -name "*oray_x1-pro*sysupgrade.bin" 2>/dev/null | head -1)
+          SYSUPGRADE=$(find bin/targets -name "*oray_x1_pro*sysupgrade.bin" 2>/dev/null | head -1)
           if [ -n "$SYSUPGRADE" ]; then
             echo "Firmware built: $SYSUPGRADE ($(du -h "$SYSUPGRADE" | cut -f1))"
             echo "name=$(basename "$SYSUPGRADE")" >> $GITHUB_OUTPUT
@@ -210,7 +210,7 @@ jobs:
       - name: List build artifacts
         run: |
           echo "=== Firmware artifacts ==="
-          find source/bin/targets -name "*oray_x1-pro*" 2>/dev/null | while read f; do
+          find source/bin/targets -name "*oray_x1_pro*" 2>/dev/null | while read f; do
             echo "  $(basename $f) ($(du -h "$f" | cut -f1))"
           done
 
@@ -234,8 +234,8 @@ jobs:
         uses: actions/upload-artifact@v4
         if: steps.compile.outputs.status == 'success'
         with:
-          name: ImmortalWrt_X1Pro-${{ steps.info.outputs.build_date }}-${{ steps.info.outputs.build_time }}-oray_x1-pro
-          path: source/bin/targets/mediatek/filogic/*oray_x1-pro*squashfs-sysupgrade.bin
+          name: ImmortalWrt_X1Pro-${{ steps.info.outputs.build_date }}-${{ steps.info.outputs.build_time }}-oray_x1_pro
+          path: source/bin/targets/mediatek/filogic/*oray_x1_pro*squashfs-sysupgrade.bin
           retention-days: 30
 
       - name: Create Release
@@ -248,7 +248,7 @@ jobs:
           name: ImmortalWrt X1Pro ${{ steps.info.outputs.build_date }}-${{ steps.info.outputs.build_time }}
           generate_release_notes: true
           files: |
-            source/bin/targets/mediatek/filogic/*oray_x1-pro*squashfs-sysupgrade.bin
+            source/bin/targets/mediatek/filogic/*oray_x1_pro*squashfs-sysupgrade.bin
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
