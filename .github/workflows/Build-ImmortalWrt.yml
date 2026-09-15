@@ -138,14 +138,23 @@ jobs:
           sed -i "/CONFIG_TARGET_DEVICE_PACKAGES_mediatek_filogic_DEVICE_/d" .config
           echo "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_oray_x1pro=y" >> .config
           echo "CONFIG_TARGET_DEVICE_PACKAGES_mediatek_filogic_DEVICE_oray_x1pro=\"kmod-usb3 kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware automount\"" >> .config
+          # 显式关闭 ruby（feeds install -a 会引入，defconfig 会自动启用）
+          echo "# CONFIG_PACKAGE_ruby is not set" >> .config
+          echo "# CONFIG_PACKAGE_ruby-dev is not set" >> .config
           chmod +x $GITHUB_WORKSPACE/diy-part1.sh
           $GITHUB_WORKSPACE/diy-part1.sh
           make defconfig
           # defconfig 会自动启用 filogic 下所有注册设备，强制关闭非 X1 Pro 的
           sed -i '/CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_oray_x1pro/!{/CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_/s/=y/=n/}' .config
           make defconfig
+          # defconfig 可能重新启用 ruby，强制关闭所有 ruby 相关配置
+          sed -i 's/^CONFIG_\(.*ruby.*\)=y/# CONFIG_\1 is not set/' .config
+          sed -i 's/^CONFIG_\(.*ruby.*\)=".*"/# CONFIG_\1 is not set/' .config
+          make defconfig
           echo "=== Target devices after defconfig ==="
           grep "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_.*=y" .config || echo "(none)"
+          echo "=== Ruby check ==="
+          grep -i ruby .config || echo "(no ruby configs)"
 
       - name: Build
         id: compile
