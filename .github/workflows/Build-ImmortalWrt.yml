@@ -4,8 +4,10 @@ permissions:
   contents: write
 
 on:
-  # push:
-  #   branches: [ main, master ]
+  push:
+    branches: [ main, master ]
+  schedule:
+    - cron: 0 20 * * 6
   workflow_dispatch:
     inputs:
       source_repo:
@@ -23,8 +25,7 @@ on:
         required: false
         type: boolean
         default: true
-  schedule:
-    - cron: 0 20 * * 6
+
   repository_dispatch:
     types: [ "X1Pro Update" ]
 
