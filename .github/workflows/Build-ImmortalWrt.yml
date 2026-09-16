@@ -262,8 +262,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  delete-old-releases:
-    name: 清理旧 Release
+  cleanup:
+    name: 清理旧数据
     runs-on: ubuntu-24.04
     needs: release
     if: always()
@@ -272,55 +272,41 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          RETENTION_HOURS=3
-          CUTOFF=$(date -d "$RETENTION_HOURS hours ago" +%s)
-          echo "保留最近 ${RETENTION_HOURS} 小时的 Release"
+          echo "仅保留最新 1 个 Release"
 
           releases=$(gh release list \
             --exclude-drafts \
-            --json tagName,publishedAt \
-            --jq '.[] | "\(.publishedAt)|\(.tagName)"')
+            --json tagName \
+            --jq '.[].tagName')
 
           if [ -z "$releases" ]; then
             echo "没有可删除的 Release"
             exit 0
           fi
 
+          # 保留第一个（最新），删除其余
           deleted=0
-          kept=0
-
-          while IFS='|' read -r published tag; do
-            [ -z "$tag" ] && continue
-            published_ts=$(date -d "$published" +%s 2>/dev/null)
-            if [ -z "$published_ts" ]; then
-              echo "  跳过: $tag (无法解析日期)"
+          first=1
+          for tag in $releases; do
+            if [ "$first" -eq 1 ]; then
+              echo "  保留: $tag (最新)"
+              first=0
               continue
             fi
-            if [ "$published_ts" -lt "$CUTOFF" ]; then
-              echo "  删除: $tag (发布于 $published)"
-              gh release delete "$tag" --yes --repo ${{ github.repository }}
-              deleted=$((deleted + 1))
-            else
-              echo "  保留: $tag (发布于 $published)"
-              kept=$((kept + 1))
-            fi
-          done <<< "$releases"
+            echo "  删除: $tag"
+            gh release delete "$tag" --yes --repo ${{ github.repository }}
+            deleted=$((deleted + 1))
+          done
 
           echo ""
-          echo "完成: 删除 ${deleted} 个, 保留 ${kept} 个"
+          echo "完成: 删除 ${deleted} 个"
 
-  delete-orphan-tags:
-    name: 清理孤立 Tag
-    runs-on: ubuntu-24.04
-    needs: delete-old-releases
-    if: always()
-    steps:
       - name: Delete Orphan Tags
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           REPO=${{ github.repository }}
-          echo "获取所有 Remote Tag..."
+          echo "删除所有孤立 Tag（无 Release 关联）"
           remote_tags=$(gh api "repos/$REPO/git/matching-refs/tags" --paginate --jq '.[].ref' 2>/dev/null)
 
           if [ -z "$remote_tags" ]; then
@@ -349,37 +335,18 @@ jobs:
           echo ""
           echo "完成: 删除 ${deleted} 个孤立 Tag"
 
-  delete-old-workflow-runs:
-    name: 清理旧 Workflow Runs
-    runs-on: ubuntu-24.04
-    needs: delete-orphan-tags
-    if: always()
-    steps:
       - name: Delete Old Workflow Runs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          RETAIN_HOURS=3
           CURRENT_RUN_ID="${{ github.run_id }}"
-          echo "清理超过 ${RETAIN_HOURS} 小时的 Workflow Runs (当前 run: $CURRENT_RUN_ID)"
+          echo "删除所有旧 Workflow Runs (当前 run: $CURRENT_RUN_ID)"
 
           gh run list -R ${{ github.repository }} --limit 200 \
-            --json databaseId,status,conclusion,createdAt,updatedAt \
-            > /tmp/runs.json
-
-          > /tmp/ids-to-delete.txt
-
-          CUTOFF=$(date -u -d "$RETAIN_HOURS hours ago" +%Y-%m-%dT%H:%M:%SZ)
-
-          # failed/cancelled/skipped: 不受时间限制，全删
-          jq -r --arg CURRENT "$CURRENT_RUN_ID" \
-            '.[] | select(.status == "completed") | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "skipped") | select((.databaseId | tostring) != $CURRENT) | .databaseId | tostring' \
-            /tmp/runs.json >> /tmp/ids-to-delete.txt
-
-          # success runs: 删超过保留期的
-          jq -r --arg CURRENT "$CURRENT_RUN_ID" --arg CUTOFF "$CUTOFF" \
-            '.[] | select(.status == "completed") | select(.conclusion == "success") | select((.databaseId | tostring) != $CURRENT) | select(.createdAt < $CUTOFF) | .databaseId | tostring' \
-            /tmp/runs.json >> /tmp/ids-to-delete.txt
+            --json databaseId \
+            --jq '.[].databaseId | tostring' \
+            | grep -v "^$CURRENT_RUN_ID$" \
+            > /tmp/ids-to-delete.txt
 
           COUNT=$(wc -l < /tmp/ids-to-delete.txt)
           echo "Found $COUNT runs to delete"
