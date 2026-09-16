@@ -1,17 +1,15 @@
 // SPDX-License-Identifier: (GPL-2.0 OR MIT)
 
 /dts-v1/;
-#include <dt-bindings/gpio/gpio.h>
-#include <dt-bindings/input/input.h>
 #include <dt-bindings/leds/common.h>
 #include "mt7981.dtsi"
 
 / {
-	model = "Oray X1 Pro v1";
+	model = "Oray X1 Pro";
 	compatible = "oray,x1pro", "mediatek,mt7981";
 
 	aliases {
-		label-mac-device = &gmac0;
+		label-mac-device = &gmac1;
 		led-boot = &led_sys_red;
 		led-failsafe = &led_sys_red;
 		led-running = &led_sys_white;
@@ -21,6 +19,16 @@
 
 	chosen: chosen {
 		stdout-path = "serial0:115200n8";
+	};
+
+	gpio-export {
+		compatible = "gpio-export";
+
+		modem-power {
+			gpio-export,name = "modem_power";
+			gpio-export,output = <0>;
+			gpios = <&pio 9 GPIO_ACTIVE_LOW>;
+		};
 	};
 
 	gpio-keys {
@@ -55,15 +63,6 @@
 			color = <LED_COLOR_ID_WHITE>;
 			gpios = <&pio 10 GPIO_ACTIVE_LOW>;
 		};
-	};
-
-	usb_vbus: regulator-usb {
-		compatible = "regulator-fixed";
-		regulator-name = "usb-vbus";
-		regulator-min-microvolt = <5000000>;
-		regulator-max-microvolt = <5000000>;
-		gpios = <&pio 9 GPIO_ACTIVE_LOW>;
-		regulator-boot-on;
 	};
 };
 
@@ -118,6 +117,8 @@
 	status = "okay";
 
 	spi_nand: flash@0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
 		compatible = "spi-nand";
 		reg = <0>;
 
@@ -128,7 +129,7 @@
 		spi-cal-enable;
 		spi-cal-mode = "read-data";
 		spi-cal-datalen = <7>;
-		spi-cal-data = /bits/ 8 <0x53 0x50 0x49 0x4e 0x41 0x4e 0x44>;
+		spi-cal-data = /bits/ 8 <0x53 0x50 0x49 0x4E 0x41 0x4E 0x44>;
 		spi-cal-addrlen = <5>;
 		spi-cal-addr = /bits/ 32 <0x0 0x0 0x0 0x0 0x0>;
 
@@ -143,13 +144,13 @@
 
 			partition@0 {
 				label = "BL2";
-				reg = <0x000000 0x100000>;
+				reg = <0x00000 0x100000>;
 				read-only;
 			};
 
 			partition@100000 {
 				label = "u-boot-env";
-				reg = <0x100000 0x080000>;
+				reg = <0x100000 0x80000>;
 				read-only;
 			};
 
@@ -172,9 +173,7 @@
 					};
 
 					macaddr_factory_e000: macaddr@e000 {
-						compatible = "mac-base";
 						reg = <0xe000 0x6>;
-						#nvmem-cell-cells = <1>;
 					};
 				};
 			};
@@ -187,8 +186,20 @@
 
 			partition@580000 {
 				label = "bdinfo";
-				reg = <0x580000 0x080000>;
+				reg = <0x580000 0x80000>;
 				read-only;
+
+				nvmem-layout {
+					compatible = "fixed-layout";
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					macaddr_bdinfo_de00: macaddr@de00 {
+						compatible = "mac-base";
+						reg = <0xde00 0x6>;
+						#nvmem-cell-cells = <1>;
+					};
+				};
 			};
 
 			partition@600000 {
@@ -220,7 +231,6 @@
 
 &xhci {
 	status = "okay";
-	vbus-supply = <&usb_vbus>;
 };
 
 &wifi {

@@ -1,6 +1,7 @@
 #!/bin/bash
 # DIY Part 1: X1 Pro device setup
 # 使用 sed/awk 直接注入设备支持，不依赖 patch 的精确行号匹配
+# 设备名：oray_x1pro，DTS 单文件
 set -euo pipefail
 
 WORKSPACE="$GITHUB_WORKSPACE"
@@ -15,7 +16,7 @@ git clone --depth=1 https://github.com/eamonxg/luci-theme-aurora "$OPENWRT/packa
 git clone --depth=1 https://github.com/eamonxg/luci-app-aurora-config "$OPENWRT/package/luci-app-aurora-config"
 echo "  → Third-party packages cloned"
 
-# 2. 复制 DTS 文件到源码树
+# 2. 复制 DTS 文件到源码树（单文件）
 DTS_FILE="$OPENWRT/target/linux/mediatek/dts/mt7981b-oray-x1-pro.dts"
 if [ -f "$DTS_FILE" ] && grep -q "oray,x1pro" "$DTS_FILE"; then
   echo "  → DTS already exists (skipping)"
@@ -26,12 +27,12 @@ fi
 
 # 3. 注入设备构建规则到 filogic.mk
 FILOGIC_MK="$OPENWRT/target/linux/mediatek/image/filogic.mk"
-if grep -q "oray_x1_pro" "$FILOGIC_MK"; then
-  echo "  → filogic.mk already has oray_x1_pro (skipping)"
+if grep -q "oray_x1pro" "$FILOGIC_MK"; then
+  echo "  → filogic.mk already has oray_x1pro (skipping)"
 else
   awk '
   /^TARGET_DEVICES \+= / && !inserted {
-    print "define Device/oray_x1_pro"
+    print "define Device/oray_x1pro"
     print "  DEVICE_VENDOR := Oray"
     print "  DEVICE_MODEL := X1 Pro"
     print "  DEVICE_VARIANT := v1"
@@ -47,13 +48,13 @@ else
     print "  KERNEL_IN_UBI := 1"
     print "  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata"
     print "endef"
-    print "TARGET_DEVICES += oray_x1_pro"
+    print "TARGET_DEVICES += oray_x1pro"
     print ""
     inserted=1
   }
   { print }
   ' "$FILOGIC_MK" > "$FILOGIC_MK.tmp" && mv "$FILOGIC_MK.tmp" "$FILOGIC_MK"
-  echo "  → filogic.mk: oray_x1_pro device added"
+  echo "  → filogic.mk: oray_x1pro device added"
 fi
 
 # 4. 注入 02_network 设备支持
@@ -64,7 +65,6 @@ else
   cp "$NETWORK_FILE" "$NETWORK_FILE.bak"
 
   # 4a. interfaces: 在 mediatek_setup_interfaces() 的 case 中插入
-  # 找到 openembed,som7981 后面紧跟 openwrt,one 的那个 case 块（interfaces 部分）
   awk '
   BEGIN { in_interfaces = 0 }
   /mediatek_setup_interfaces\(\)/ { in_interfaces = 1 }
