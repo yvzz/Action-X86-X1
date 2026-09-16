@@ -272,9 +272,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          RETENTION=7
-          CUTOFF=$(date -d "$RETENTION days ago" +%s)
-          echo "保留最近 ${RETENTION} 天的 Release"
+          RETENTION_HOURS=3
+          CUTOFF=$(date -d "$RETENTION_HOURS hours ago" +%s)
+          echo "保留最近 ${RETENTION_HOURS} 小时的 Release"
 
           releases=$(gh release list \
             --exclude-drafts \
@@ -359,9 +359,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          RETAIN_DAYS=3
+          RETAIN_HOURS=3
           CURRENT_RUN_ID="${{ github.run_id }}"
-          echo "清理超过 ${RETAIN_DAYS} 天的 Workflow Runs (当前 run: $CURRENT_RUN_ID)"
+          echo "清理超过 ${RETAIN_HOURS} 小时的 Workflow Runs (当前 run: $CURRENT_RUN_ID)"
 
           gh run list -R ${{ github.repository }} --limit 200 \
             --json databaseId,status,conclusion,createdAt,updatedAt \
@@ -369,7 +369,7 @@ jobs:
 
           > /tmp/ids-to-delete.txt
 
-          CUTOFF=$(date -u -d "$RETAIN_DAYS days ago" +%Y-%m-%dT%H:%M:%SZ)
+          CUTOFF=$(date -u -d "$RETAIN_HOURS hours ago" +%Y-%m-%dT%H:%M:%SZ)
 
           # failed/cancelled/skipped: 不受时间限制，全删
           jq -r --arg CURRENT "$CURRENT_RUN_ID" \
