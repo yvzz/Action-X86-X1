@@ -268,6 +268,9 @@ jobs:
     needs: release
     if: always()
     steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
       - name: Delete Old Releases
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
